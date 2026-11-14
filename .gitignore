@@ -1,0 +1,11 @@
+# CLion / CMake
+.idea/
+cmake-build-*/
+build/
+
+# makepkg / Arch build artifacts
+/pkg/
+*.pkg.tar*
+*.tar.gz
+*.tar.xz
+*.tar.zst

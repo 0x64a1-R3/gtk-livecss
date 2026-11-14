@@ -1,0 +1,26 @@
+name: Build & Package Check
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+
+jobs:
+  build-and-lint:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build & lint dependencies
+        run: pacman -Syu --noconfirm cmake namcap
+
+      - name: Build with CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build
+
+      - name: Lint PKGBUILD with namcap
+        run: namcap packaging/arch/PKGBUILD

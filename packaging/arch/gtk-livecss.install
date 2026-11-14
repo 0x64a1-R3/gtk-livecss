@@ -1,0 +1,34 @@
+_so_path='/usr/lib/libgtk_livecss.so'
+_preload='/etc/ld.so.preload'
+
+post_install() {
+    touch "$_preload"
+    chmod 0644 "$_preload"
+    if ! grep -Fxq "$_so_path" "$_preload"; then
+        [ -s "$_preload" ] && [ -n "$(tail -c 1 "$_preload")" ] && echo "" >> "$_preload"
+        echo "$_so_path" >> "$_preload"
+    fi
+
+    cat << 'EOF'
+        ==> Registered /usr/lib/libgtk_livecss.so in /etc/ld.so.preload.
+        ==> Newly launched GTK3, GTK4, and Libadwaita applications will now hot-reload
+            CSS changes in ~/.config/gtk-3.0/ and ~/.config/gtk-4.0/.
+        ==> Note: 32-bit binaries (e.g., Wine/Steam) may log a harmless
+            "wrong ELF class: ELFCLASS64: ignored" message from ld.so.
+    EOF
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    if [ -f "$_preload" ]; then
+        grep -Fxv "$_so_path" "$_preload" > "${_preload}.tmp" || true
+        mv "${_preload}.tmp" "$_preload"
+        chmod 0644 "$_preload"
+        if [ ! -s "$_preload" ]; then
+            rm -f "$_preload"
+        fi
+    fi
+}
