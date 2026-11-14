@@ -5,13 +5,13 @@ pkgver=1.0.0
 pkgrel=1
 pkgdesc="Universal LD_PRELOAD CSS hot-reloader for GTK3, GTK4, and Libadwaita"
 arch=('x86_64' 'aarch64')
-url="https://github.com/gtk-livecss/gtk-livecss"
+url="https://github.com/0x64a1-R3/gtk-livecss"
 license=('MIT')
 depends=('glibc' 'gcc-libs')
 makedepends=('cmake')
 install="$pkgname.install"
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('6368b91800e627b30890977329759cab8081761c3327f979e29dd14ab7f1810f')
 
 build() {
     cmake -B build -S "$pkgname-$pkgver" \
