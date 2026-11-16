@@ -1,7 +1,7 @@
 # Maintainer: 0x64a1-R3 <0x64a1-R3@proton.me>
 
 pkgname=gtk-livecss
-pkgver=1.0.1
+pkgver=1.0.2
 pkgrel=1
 pkgdesc="Universal LD_PRELOAD CSS hot-reloader for GTK3, GTK4, and Libadwaita"
 arch=('x86_64' 'aarch64')
@@ -11,7 +11,7 @@ depends=('glibc' 'gcc-libs')
 makedepends=('cmake')
 install="$pkgname.install"
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('5fc4afbf20241644e1aa935834de293ca18285ec45e49d971273da615c4220a6')
+sha256sums=('b1323a2559971f24f995f08e4b21318d85422b213bc4c565734ba0a6b77b2a8e')
 
 build() {
     cmake -B build -S "$pkgname-$pkgver" \
