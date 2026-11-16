@@ -1,0 +1,61 @@
+# Maintainer: 0x64a1-R3 <0x64a1-R3@proton.me>
+
+pkgname=gtk-livecss-git
+pkgver=1.0.0.r4.ga7adca4
+pkgrel=1
+pkgdesc="Universal LD_PRELOAD CSS hot-reloader for GTK3, GTK4, and Libadwaita (local dev build)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/0x64a1-R3/gtk-livecss"
+license=('MIT')
+depends=('glibc' 'gcc-libs')
+makedepends=('cmake' 'git')
+provides=('gtk-livecss')
+conflicts=('gtk-livecss')
+install="gtk-livecss.install"
+source=()
+sha256sums=()
+
+_reporoot() {
+    realpath "$startdir/../../.."
+}
+
+pkgver() {
+    local root base_ver
+    root="$(_reporoot)"
+    base_ver="$(sed -nE 's/^[[:space:]]*VERSION[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$root/CMakeLists.txt" | head -n1)"
+    base_ver="${base_ver:-1.0.0}"
+
+    if git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        printf "%s.r%s.g%s" \
+            "$base_ver" \
+            "$(git -C "$root" rev-list --count HEAD)" \
+            "$(git -C "$root" rev-parse --short=7 HEAD)"
+    else
+        printf "%s" "$base_ver"
+    fi
+}
+
+build() {
+    local root
+    root="$(_reporoot)"
+
+    cmake -B "$srcdir/build" -S "$root" \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -Wno-dev
+    cmake --build "$srcdir/build"
+}
+
+package() {
+    local root
+    root="$(_reporoot)"
+
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+    if [ -f "$root/LICENSE" ]; then
+        install -Dm644 "$root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    fi
+    if [ -f "$root/README.md" ]; then
+        install -Dm644 "$root/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+    fi
+}
