@@ -1,7 +1,7 @@
 # Maintainer: 0x64a1-R3 <0x64a1-R3@proton.me>
 
 pkgname=gtk-livecss
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="Universal LD_PRELOAD CSS hot-reloader for GTK3, GTK4, and Libadwaita"
 arch=('x86_64' 'aarch64')
