@@ -11,7 +11,7 @@ depends=('glibc' 'gcc-libs')
 makedepends=('cmake')
 install="$pkgname.install"
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('6368b91800e627b30890977329759cab8081761c3327f979e29dd14ab7f1810f')
+sha256sums=('5fc4afbf20241644e1aa935834de293ca18285ec45e49d971273da615c4220a6')
 
 build() {
     cmake -B build -S "$pkgname-$pkgver" \
