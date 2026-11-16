@@ -1,28 +1,31 @@
 /**
  * @file main.cpp
  * @brief gtk-livecss: Universal LD_PRELOAD runtime CSS hot-reloader for GTK3, GTK4,
- *        Libadwaita, Firefox/Gecko, and Chromium/Electron-based browsers.
+ *        Libadwaita, and GTK-based toolkit derivatives (libhandy, libgranite,
+ *        gtk-layer-shell, PyGObject, GJS, Vala, gtk-rs).
  *
  * Architectural Design & Constraints:
  *  1. Zero Link-Time Toolkit Dependencies:
- *     Must never link directly against libgtk-3, libgtk-4, or libglib-2.0. Mapping GTK
+ *     Never links directly against libgtk-3, libgtk-4, or libglib-2.0. Mapping GTK
  *     into non-GUI processes wastes memory, and loading libgtk-4 into a GTK3 or
- *     Python/PyGObject process causes GType registry collisions.
+ *     PyGObject process causes GType registry collisions.
  *
  *  2. Passive Toolkit Probing (RTLD_NOLOAD) & RTLD_LOCAL-Safe Interposition:
  *     dlopen(..., RTLD_NOLOAD) checks whether the host process has already mapped
  *     libgtk-4.so.1 or libgtk-3.so.0 and initialized a GdkDisplay/GdkScreen without
  *     loading libraries from disk or running ELF constructors. Non-GTK processes and
  *     headless helpers stop polling automatically. Interposed entry points fall back to
- *     RTLD_NOLOAD handles when dlsym(RTLD_NEXT, ...) returns nullptr (e.g., hosts
+ *     RTLD_NOLOAD handles when dlsym(RTLD_NEXT, ...) returns nullptr (e.g., runtimes
  *     that dlopen GLib/GIO/GTK with RTLD_LOCAL).
  *
- *  3. Browser & Toolkit Invalidation:
- *     - GTK3 / GTK4 / Libadwaita: Reloads GtkCssProvider at priority 801 (USER + 1).
- *     - GTK3 Widgets: Calls gtk_style_context_reset_widgets() to flush style caches.
- *     - Firefox / Zen / Chromium / Electron: Emits `notify::gtk-theme-name` and
- *       `notify::gtk-application-prefer-dark-theme` on GtkSettings so nsLookAndFeel
- *       (CSS System Colors) and GtkUi::OnThemeChanged() re-sample GTK styles live.
+ *  3. Pure GTK3 / GTK4 / Libadwaita Invalidation:
+ *     - GTK3 / GTK4 / Libadwaita: Reloads GtkCssProvider at priority 801 (USER + 1)
+ *       whenever ~/.config/gtk-{3,4}.0/*.css changes.
+ *     - GTK3 & libhandy Widgets: Calls gtk_style_context_reset_widgets() to flush
+ *       cached widget style contexts.
+ *     - AdwStyleManager / HdyStyleManager / GtkSettings Listeners: Emits
+ *       `notify::gtk-theme-name` and `notify::gtk-application-prefer-dark-theme` on
+ *       GtkSettings so style managers and custom widgets re-evaluate theme state live.
  *
  *  4. Lock-Free Initialization & Main-Thread Affinity:
  *     GLib/GTK objects are mutated strictly on the owner thread of GLib's default
@@ -101,6 +104,7 @@ namespace {
     std::unique_ptr<ReloadContext> g_ctx = nullptr;
     std::atomic<bool> g_poller_active{false};
     std::atomic<bool> g_attached{false};
+    std::atomic<int>  g_poll_attempts{0};
 
     /**
      * @brief Resolves the real target of an interposed PLT symbol, falling back to
@@ -134,7 +138,7 @@ namespace {
     /**
      * @brief Resolves a symbol from an explicit library handle first, falling back to RTLD_DEFAULT.
      *
-     * Explicit handle lookup is required for hosts (e.g., Python/PyGObject, GJS) that
+     * Explicit handle lookup is required for bindings (e.g., PyGObject, GJS) that
      * load GI typelib libraries with RTLD_LOCAL (invisible to RTLD_DEFAULT).
      */
     template <typename T>
@@ -154,8 +158,8 @@ namespace {
     void on_css_parsing_error(void*, void*, void*, void*) {}
 
     /**
-     * @brief Notifies toolkit style caches and browser UI layers (Firefox, Zen, Chromium,
-     *        Helium, Brave, Electron) that GTK theme rules have changed.
+     * @brief Flushes GTK3 widget style caches and notifies GtkSettings listeners
+     *        (such as AdwStyleManager and HdyStyleManager) that CSS rules updated.
      */
     void notify_theme_listeners(const ReloadContext* ctx) {
         if (!ctx || !ctx->gtk_handle) return;
@@ -339,13 +343,14 @@ namespace {
 
         g_ctx = std::move(ctx);
         g_attached.store(true, std::memory_order_release);
+        g_poller_active.store(false, std::memory_order_release);
         return true;
     }
 
     /**
      * @brief Polls at 100 ms intervals on the GLib main loop until GTK initializes a default
-     *        GdkDisplay (GTK4) or GdkScreen (GTK3). Stops cleanly after 10 seconds for
-     *        non-GTK processes, headless GLib daemons, and browser child processes.
+     *        GdkDisplay (GTK4/Libadwaita) or GdkScreen (GTK3/libhandy). Stops cleanly after
+     *        10 seconds for non-GTK processes and headless GLib daemons.
      */
     int poll_for_gtk_display(void*) {
         if (g_attached.load(std::memory_order_acquire)) {
@@ -353,8 +358,7 @@ namespace {
             return 0; // G_SOURCE_REMOVE
         }
 
-        static int attempts = 0;
-        if (++attempts > 100) {
+        if (g_poll_attempts.fetch_add(1, std::memory_order_relaxed) >= 100) {
             g_poller_active.store(false, std::memory_order_release);
             return 0; // G_SOURCE_REMOVE
         }
@@ -390,9 +394,16 @@ namespace {
     /**
      * @brief Schedules the display poller on GLib's default main context if libglib-2.0 is loaded.
      */
-    void schedule_poller() {
-        if (g_attached.load(std::memory_order_acquire) ||
-            g_poller_active.load(std::memory_order_acquire)) {
+    void schedule_poller(bool reset_attempts = false) {
+        if (g_attached.load(std::memory_order_acquire)) {
+            return;
+        }
+
+        if (reset_attempts) {
+            g_poll_attempts.store(0, std::memory_order_relaxed);
+        }
+
+        if (g_poller_active.load(std::memory_order_acquire)) {
             return;
         }
 
@@ -416,7 +427,7 @@ namespace {
 extern "C" {
     __attribute__((constructor))
     static void preload_init() {
-        schedule_poller();
+        schedule_poller(false);
     }
 
     EXPORT_HOOK void gtk_init(int* argc, char*** argv) {
@@ -425,7 +436,7 @@ extern "C" {
         if (auto fn = resolve_next_sym(real_fn, "libgtk-4.so.1", "libgtk-3.so.0", "gtk_init")) {
             fn(argc, argv);
         }
-        schedule_poller();
+        schedule_poller(true);
     }
 
     EXPORT_HOOK int gtk_init_check(int* argc, char*** argv) {
@@ -433,7 +444,7 @@ extern "C" {
         static std::atomic<fn_t> real_fn{nullptr};
         auto fn = resolve_next_sym(real_fn, "libgtk-4.so.1", "libgtk-3.so.0", "gtk_init_check");
         int res = fn ? fn(argc, argv) : 0;
-        schedule_poller();
+        schedule_poller(true);
         return res;
     }
 
@@ -441,7 +452,7 @@ extern "C" {
         using fn_t = int (*)(void*, int, char**);
         static std::atomic<fn_t> real_fn{nullptr};
         auto fn = resolve_next_sym(real_fn, "libgio-2.0.so.0", nullptr, "g_application_run");
-        schedule_poller();
+        schedule_poller(true);
         return fn ? fn(application, argc, argv) : 0;
     }
 
@@ -449,7 +460,7 @@ extern "C" {
         using fn_t = void (*)(void*);
         static std::atomic<fn_t> real_fn{nullptr};
         auto fn = resolve_next_sym(real_fn, "libglib-2.0.so.0", nullptr, "g_main_loop_run");
-        schedule_poller();
+        schedule_poller(true);
         if (fn) fn(loop);
     }
 
@@ -458,7 +469,7 @@ extern "C" {
         static std::atomic<fn_t> real_fn{nullptr};
         auto fn = resolve_next_sym(real_fn, "libglib-2.0.so.0", nullptr, "g_main_context_iteration");
         if (context == nullptr && !g_attached.load(std::memory_order_acquire)) {
-            schedule_poller();
+            schedule_poller(false);
         }
         return fn ? fn(context, may_block) : 0;
     }

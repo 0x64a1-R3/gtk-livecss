@@ -9,3 +9,6 @@ pkg/
 *.tar.gz
 *.tar.xz
 *.tar.zst
+packaging/arch/dev/pkg/
+packaging/arch/dev/src/
+packaging/arch/dev/*.pkg.tar*
