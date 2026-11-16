@@ -12,3 +12,4 @@ pkg/
 packaging/arch/dev/pkg/
 packaging/arch/dev/src/
 packaging/arch/dev/*.pkg.tar*
+packaging/arch/src/
