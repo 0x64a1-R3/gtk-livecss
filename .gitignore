@@ -4,7 +4,7 @@ cmake-build-*/
 build/
 
 # makepkg / Arch build artifacts
-/pkg/
+pkg/
 *.pkg.tar*
 *.tar.gz
 *.tar.xz
